@@ -1,0 +1,5 @@
+1 USB用法
+    1 不需要在gpio_msp.h/.c里配置引脚
+    2 直接复制lib/usb和communication/usb_computer.cpp/.h文件
+    3 在setup()函数里添加usb_init()即可
+2 USB与串口是独立的接口, 共同调用comm_recv类进行数据分析

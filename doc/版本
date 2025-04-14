@@ -1,0 +1,10 @@
+#demo0 基础化各个部分
+  1 esp
+    1 分成两部分:
+      1 像有线直连一般操作, 如uart1
+      2 配置esp
+    2 准备采用 UartComputer 类的基础上重写 rxAnalysis 函数
+      设置 configFlag, 如果 uart1 下发指令把 configFlag置1, 则直接把 esp 接收到的数据全部转发给 uart1 (cmd='s'). uart1下发的esp指令, 全部转发给esp
+
+ 
+     

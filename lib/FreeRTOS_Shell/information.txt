@@ -1,0 +1,6 @@
+The codes are based on jiladahe1997 [https://github.com/jiladahe1997/FreeRTOS-Shell.git]
+
+2024.1.24 First edition
+- Add the GCC support
+- Fix some bugs
+- **But still has some bugs** 
