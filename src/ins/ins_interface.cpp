@@ -21,6 +21,7 @@ IMU_Bus imu_bus;
 MAG_Bus mag_bus;
 Bar_Bus bar_bus;
 Rnf_Bus rnf_bus;
+
 INS_Bus ins_bus;
 
 static bool flag = false;
@@ -120,7 +121,7 @@ static void rnf_update(uint32_t timestamp)
     rnf_flag = 1;
 }
 
-static void ins_step()
+static void ins_step() //这里要对数据处理一下，判断是否接收到，以及选择哪个高度数据
 {
     if (imu_flag)
     {
@@ -151,4 +152,13 @@ static void ins_step()
     {
         rnf_flag = 0;
     }
+    if (gps_flag)
+    {
+        gps_flag = 0;
+    }
+    if (alt_flag)
+    {
+        alt_flag = 0;
+    }
+    //判断哪个高度数据可靠
 }

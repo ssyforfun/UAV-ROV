@@ -23,8 +23,8 @@ typedef enum
 typedef enum
 {       
   Stabilize = 0,  
-  Atthold,
-  Depthhold,
+  Auto,
+  Zhold,
   Manual,            
 } mode_list;
 
@@ -42,8 +42,8 @@ typedef struct
     float pitch_cmd;
     float yaw_cmd;
     float depth_cmd;
-    float forward_cmd;
-    float lateral_cmd;
+    // float forward_cmd;
+    // float lateral_cmd;
     //自动模式指令，目前xy无法指定
     float yaw_disired_cmd;
     float depth_disired_cmd;

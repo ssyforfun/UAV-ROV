@@ -37,9 +37,9 @@ typedef struct
   PID_CLASS depth_pid;
   PID_CLASS depth_vel_pid;
   float throttle_thrust; // throttle thrust input value, +/- 1.0
-  float forward_thrust;  // forward thrust input value, +/- 1.0
-  float lateral_thrust;  // lateral thrust input value, +/- 1.0
-} z_controller_t;
+  // float forward_thrust;  // forward thrust input value, +/- 1.0
+  // float lateral_thrust;  // lateral thrust input value, +/- 1.0
+} depth_controller_t;
 
 typedef struct
 {
@@ -49,10 +49,19 @@ typedef struct
 
 typedef struct
 {
+  PID_CLASS alt_pid;
+  PID_CLASS alt_vel_pid;
+  float throttle_thrust;
+} alt_controller_t;
+
+typedef struct
+{
   INS_Bus *ctrl_ins_bus;
   FMS_Bus *ctrl_fms_bus;
   attitude_controller_t att_controller;
   depth_controller_t depth_controller;
+  alt_controller_t alt_controller;
+  xy_controller_t xy_controller;
 } CTRL_Bus;
 
 static void Manual_control();
@@ -67,7 +76,10 @@ static void depth_control(uint32_t set_depth);
 
 static void depth_rate_control(uint32_t set_depth_vel);
 
-static void forward_lateral_control(uint32_t set_forward, uint32_t set_lateral);
+static void alt_control(uint32_t set_alt);
+
+static void alt_rate_control(uint32_t set_alt_vel);
+// static void forward_lateral_control(uint32_t set_forward, uint32_t set_lateral);
 
 static void thrust_alloc();
 

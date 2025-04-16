@@ -88,6 +88,11 @@ typedef struct {
   /* position z command in control frame */
   float z_cmd;
 
+  /* position x command in control frame */
+  float x_cmd;
+
+  /* position y command in control frame */
+  float y_cmd;
   /* 摄像头舵机 */
   float servo_cmd;
 

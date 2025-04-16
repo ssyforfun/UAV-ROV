@@ -16,7 +16,9 @@
 
 #define MOTORS_DEADZONE_P 0.0f
 #define MOTORS_DEADZONE_N 0.0f
+#define CONSTANT_G 9.81f
 
+#define WEIGHT 1.5f
 // 推力系数矩阵 roll pitch yaw heave surge sway，6推进器
 // float motor1_factor[MOTORS_MAX_NUM_MOTORS] = {0, 0, 1.0f, 0, -1.0f, 1.0f};
 // float motor2_factor[MOTORS_MAX_NUM_MOTORS] = {0, 0, -1.0f, 0, -1.0f, -1.0f};
@@ -49,8 +51,8 @@ CTRL_Bus ctrl_bus;
 float motor_out[MOTORS_MAX_NUM_MOTORS];
 float motor_thrust[MOTORS_MAX_NUM_MOTORS];
 // float thrust_max;
-bool roll_pitch_mode = false;
-float feedforward_gain_yaw = 0.1;
+
+
 
 TimeTag ctrl_interval = {
     .tag = 0,
@@ -135,8 +137,25 @@ void control_interface_init(void)
     ctrl_bus.depth_controller.depth_vel_pid.ki = 0;
     ctrl_bus.depth_controller.depth_vel_pid.kd = 0;
 
+    // 初始化高度控制器PID
+    ctrl_bus.alt_controller.alt_pid.init();
+    ctrl_bus.alt_controller.alt_pid.isIncrement = true;
+    ctrl_bus.alt_controller.alt_pid.vcmax = Speed_z_Max;
+    ctrl_bus.alt_controller.alt_pid.vcmin = -Speed_z_Max;
+    ctrl_bus.alt_controller.alt_pid.kp = 1.2;
+    ctrl_bus.alt_controller.alt_pid.ki = 0.006;
+    ctrl_bus.alt_controller.alt_pid.kd = 0.5;
+    ctrl_bus.alt_controller.alt_vel_pid.init();
+    ctrl_bus.alt_controller.alt_vel_pid.isIncrement = true;
+    ctrl_bus.alt_controller.alt_vel_pid.vcmax = Speed_z_Max; // 待改动，目前按照手动模式最大值来设置
+    ctrl_bus.alt_controller.alt_vel_pid.vcmin = -Speed_z_Max;
+    ctrl_bus.alt_controller.alt_vel_pid.kp = 0.7;
+    ctrl_bus.alt_controller.alt_vel_pid.ki = 0;
+    ctrl_bus.alt_controller.alt_vel_pid.kd = 0;
+
+
     // 初始化输出
-    ctrl_bus.depth_controller.forward_thrust = ctrl_bus.depth_controller.lateral_thrust = ctrl_bus.depth_controller.throttle_thrust = ctrl_bus.att_controller.roll_thrust = ctrl_bus.att_controller.pitch_thrust = ctrl_bus.att_controller.yaw_thrust = 0.0f;
+    ctrl_bus.alt_controller.throttle_thrust  = ctrl_bus.depth_controller.throttle_thrust = ctrl_bus.att_controller.roll_thrust = ctrl_bus.att_controller.pitch_thrust = ctrl_bus.att_controller.yaw_thrust = 0.0f;
 }
 
 void control_interface_step(uint32_t timestamp)
@@ -188,15 +207,15 @@ static void Manual_control()
     // ctrl_bus.depth_controller.depth_vel_pid.ref = ctrl_bus.depth_controller.depth_pid.calc(ctrl_bus.depth_controller.depth_pid.fb);
     // ctrl_bus.depth_controller.throttle_thrust = ctrl_bus.depth_controller.depth_vel_pid.calc(ctrl_bus.depth_controller.depth_vel_pid.fb);
 
-    ctrl_bus.depth_controller.forward_thrust = ctrl_bus.ctrl_fms_bus->fms_out.u_cmd;
-    ctrl_bus.depth_controller.lateral_thrust = ctrl_bus.ctrl_fms_bus->fms_out.v_cmd;
-    ctrl_bus.depth_controller.throttle_thrust = ctrl_bus.ctrl_fms_bus->fms_out.w_cmd;
+    // ctrl_bus.depth_controller.forward_thrust = ctrl_bus.ctrl_fms_bus->fms_out.u_cmd;
+    // ctrl_bus.depth_controller.lateral_thrust = ctrl_bus.ctrl_fms_bus->fms_out.v_cmd;
+    ctrl_bus.alt_controller.throttle_thrust = ctrl_bus.ctrl_fms_bus->fms_out.w_cmd;
     ctrl_bus.att_controller.roll_thrust = ctrl_bus.ctrl_fms_bus->fms_out.p_cmd;
     ctrl_bus.att_controller.pitch_thrust = ctrl_bus.ctrl_fms_bus->fms_out.q_cmd;
     ctrl_bus.att_controller.yaw_thrust = ctrl_bus.ctrl_fms_bus->fms_out.r_cmd;
 
-    ctrl_bus.depth_controller.depth_pid.vc = ctrl_bus.ctrl_ins_bus->bar->depvel;
-    ctrl_bus.depth_controller.depth_vel_pid.vc = ctrl_bus.depth_controller.throttle_thrust;
+    ctrl_bus.alt_controller.alt_pid.vc = ctrl_bus.ctrl_ins_bus->alt->altvel;
+    ctrl_bus.alt_controller.alt_vel_pid.vc = ctrl_bus.alt_controller.throttle_thrust;
 
     // ctrl_bus.att_controller.yaw_rate_pid.vc = ctrl_bus.att_controller.yaw_thrust;
     // ctrl_bus.att_controller.yaw_pid.vc = ctrl_bus.ctrl_ins_bus->imu->gyr_z;
@@ -234,20 +253,91 @@ static void yaw_heading_control(float set_yaw)
     {
         // ctrl_bus.att_controller.yaw_rate_pid.ref = ctrl_bus.att_controller.yaw_pid.calc(ctrl_bus.att_controller.yaw_pid.fb);
         // ctrl_bus.att_controller.yaw_thrust = ctrl_bus.att_controller.yaw_rate_pid.calc(ctrl_bus.att_controller.yaw_rate_pid.fb);
-        ctrl_bus.att_controller.yaw_thrust = ctrl_bus.att_controller.yaw_pid.calc(ctrl_bus.att_controller.yaw_pid.fb) + feedforward_gain_yaw * (abs(ctrl_bus.att_controller.yaw_pid.fb - set_yaw));
+        ctrl_bus.att_controller.yaw_thrust = ctrl_bus.att_controller.yaw_pid.calc(ctrl_bus.att_controller.yaw_pid.fb);
     }
     else if ((ctrl_bus.att_controller.yaw_pid.fb - set_yaw) >= M_PI)
     {
         //     ctrl_bus.att_controller.yaw_rate_pid.ref = ctrl_bus.att_controller.yaw_pid.calc(ctrl_bus.att_controller.yaw_pid.fb - 2 * M_PI);
         //     ctrl_bus.att_controller.yaw_thrust = ctrl_bus.att_controller.yaw_rate_pid.calc(ctrl_bus.att_controller.yaw_rate_pid.fb);
-        ctrl_bus.att_controller.yaw_thrust = ctrl_bus.att_controller.yaw_pid.calc(ctrl_bus.att_controller.yaw_pid.fb - 2 * M_PI) + feedforward_gain_yaw * (abs(ctrl_bus.att_controller.yaw_pid.fb - set_yaw));
+        ctrl_bus.att_controller.yaw_thrust = ctrl_bus.att_controller.yaw_pid.calc(ctrl_bus.att_controller.yaw_pid.fb - 2 * M_PI) ;
     }
     else
     {
         //     ctrl_bus.att_controller.yaw_rate_pid.ref = ctrl_bus.att_controller.yaw_pid.calc(ctrl_bus.att_controller.yaw_pid.fb + 2 * M_PI);
         //     ctrl_bus.att_controller.yaw_thrust = ctrl_bus.att_controller.yaw_rate_pid.calc(ctrl_bus.att_controller.yaw_rate_pid.fb);
-        ctrl_bus.att_controller.yaw_thrust = ctrl_bus.att_controller.yaw_pid.calc(ctrl_bus.att_controller.yaw_pid.fb + 2 * M_PI) + feedforward_gain_yaw * (abs(ctrl_bus.att_controller.yaw_pid.fb - set_yaw));
+        ctrl_bus.att_controller.yaw_thrust = ctrl_bus.att_controller.yaw_pid.calc(ctrl_bus.att_controller.yaw_pid.fb + 2 * M_PI) ;
     }
+}
+
+static void xy_control(float set_hor[2] ,float cur_yaw)
+{
+   
+    float cur_pos[2] = {ctrl_bus.ctrl_ins_bus->gps->global_position[0], ctrl_bus.ctrl_ins_bus->gps->global_position[1]};
+    float cur_v[2] = {ctrl_bus.ctrl_ins_bus->gps->global_vel[0], ctrl_bus.ctrl_ins_bus->gps->global_vel[1]};
+
+    // 位置误差
+    float error_pos[2] = {set_hor[0] - cur_pos[0], set_hor[1] - cur_pos[1]};
+
+    float K_xy_p = 0.5f;
+
+    // 外环：位置误差 -> 期望速度（期望速度是位置控制的输出）
+    float desired_vel[2] = {error_pos[0] * K_xy_p, error_pos[1] * K_xy_p};
+
+    // 内环：速度控制
+    static float prev_error_vel[2] = {0.0f, 0.0f};  // 速度误差的上一时刻值
+    static float integral_vel[2] = {0.0f, 0.0f};    // 速度误差的积分部分
+
+    float error_vel[2] = {desired_vel[0] - cur_v[0], desired_vel[1] - cur_v[1]};
+
+    float K_xyv_p = 0.5f;
+    float K_xyv_i = 0.5f;
+    float K_xyv_d = 0.5f;
+
+    // 积分部分
+    integral_vel[0] += error_vel[0];
+    integral_vel[1] += error_vel[1];
+
+    // 微分部分
+    float diff_vel[2] = {error_vel[0] - prev_error_vel[0], error_vel[1] - prev_error_vel[1]};
+
+    // 速度控制器的输出：期望加速度
+    float desired_acc[2];
+    desired_acc[0] = K_xyv_p * error_vel[0] + K_xyv_i * integral_vel[0] + K_xyv_d * diff_vel[0];
+    desired_acc[1] = K_xyv_p * error_vel[1] + K_xyv_i * integral_vel[1] + K_xyv_d * diff_vel[1];
+    float desired_roll = 1/CONSTANT_G *(sin(cur_yaw)*desired_acc[0]-cos(cur_yaw)*desired_acc[1] );
+    float desired_pitch = 1/CONSTANT_G *(cos(cur_yaw)*desired_acc[0]+ sin(cur_yaw)*desired_acc[1] );
+
+    prev_error_vel[0] = error_vel[0];
+    prev_error_vel[1] = error_vel[1];
+    ctrl_bus.att_controller.roll_pid.ref = desired_roll;
+    ctrl_bus.att_controller.pitch_pid.ref = desired_pitch;
+}
+
+static void alt_control(float set_alt)
+{
+    float cur_alt = ctrl_bus.ctrl_ins_bus->gps->global_position[2]; //气压计 激光测距 GPS ，在FMS要对数据做处理
+    float cur_alt_vel = ctrl_bus.ctrl_ins_bus->gps->global_vel[2];
+    float error_alt = set_alt - cur_alt;
+    float K_alt_p = 0.5f;
+    float desired_vel = error_alt * K_alt_p;
+    static float prev_error_vel = 0.0f;  // 速度误差的上一时刻值
+    static float integral_vel = 0.0f;    // 速度误差的积分部分
+
+    float error_alt_vel = cur_alt_vel - desired_vel;
+
+    float K_alt_p = 0.5f;
+    float K_alt_i = 0.5f;
+    float K_alt_d = 0.5f;
+
+    integral_vel += error_alt_vel;
+    float diff_vel = error_alt_vel - prev_error_vel;
+
+    float desired_acc;
+    desired_acc = K_alt_p * error_alt_vel + K_alt_i*integral_vel+K_alt_d*diff_vel;
+    float desired_T = WEIGHT*(CONSTANT_G + desired_acc);
+
+    prev_error_vel = error_alt_vel;
+    ctrl_bus.alt_controller.throttle_thrust = desired_T;
 }
 
 static void depth_control(float set_depth)
@@ -264,15 +354,28 @@ static void depth_rate_control(float set_depth_vel)
     ctrl_bus.depth_controller.throttle_thrust = ctrl_bus.depth_controller.depth_vel_pid.calc(ctrl_bus.depth_controller.depth_vel_pid.fb);
 }
 
-static void forward_lateral_control(float set_forward, float set_lateral)
+static void alt_control(float set_alt)
 {
-    ctrl_bus.depth_controller.forward_thrust = set_forward;
-    ctrl_bus.depth_controller.lateral_thrust = set_lateral;
+    ctrl_bus.alt_controller.alt_pid.ref = set_alt;
+
+    ctrl_bus.alt_controller.alt_vel_pid.ref = ctrl_bus.alt_controller.alt_pid.calc(ctrl_bus.alt_controller.alt_pid.fb);
+    ctrl_bus.alt_controller.throttle_thrust = ctrl_bus.alt_controller.alt_vel_pid.calc(ctrl_bus.alt_controller.alt_vel_pid.fb);
 }
 
-static void position_control(float forward, float backward, float left, float right)
+static void alt_rate_control(float set_alt_vel)
 {
+    ctrl_bus.alt_controller.alt_vel_pid.ref = set_alt_vel;
+    ctrl_bus.alt_controller.throttle_thrust = ctrl_bus.alt_controller.alt_vel_pid.calc(ctrl_bus.alt_controller.alt_vel_pid.fb);
 }
+// static void forward_lateral_control(float set_forward, float set_lateral)
+// {
+//     ctrl_bus.depth_controller.forward_thrust = set_forward;
+//     ctrl_bus.depth_controller.lateral_thrust = set_lateral;
+// }
+
+// static void position_control(float forward, float backward, float left, float right)
+// {
+// }
 
 // static void thrust_max_init()
 // {
@@ -300,29 +403,31 @@ static void thrust_alloc()
     float p = (float)ctrl_bus.att_controller.pitch_thrust * 0.707f;
     float y = (float)ctrl_bus.att_controller.yaw_thrust;
     float t = (float)ctrl_bus.depth_controller.throttle_thrust;
-    motor_thrust[MOTORS_MOT_1] = limitThrust(t + r + p + y);
+    motor_thrust[MOTORS_MOT_1] = t + r + p + y;
 
-    motor_thrust[MOTORS_MOT_2] = limitThrust(t + r - p - y); 
+    motor_thrust[MOTORS_MOT_2] = t + r - p - y; 
 
-    motor_thrust[MOTORS_MOT_3] = limitThrust(t - r - p + y);
+    motor_thrust[MOTORS_MOT_3] = t - r - p + y;
 
-    motor_thrust[MOTORS_MOT_4] = limitThrust(t - r + p - y);
+    motor_thrust[MOTORS_MOT_4] = t - r + p - y;
 
     // PWM输出
     thrust_to_pwm();
 }
-
+float hover = 0.3;
 static void thrust_to_pwm() // 转速和电压近似为线性关系，推力与转速近似为二次方关系，即推力与电压的二次方成正比关系
 {
     for (int i = 0; i < MOTORS_MAX_NUM_MOTORS; i++)
     {
         if (motor_thrust[i] >= 0)
         {
-            motor_out[i] =  _constrain(motor_thrust[i], 0, 1.0);
+            float out = motor_thrust[i]+hover;
+            motor_out[i] =  _constrain(out, 0, 1.0);
         }
         else
         {
-            motor_out[i] =  -_constrain(motor_thrust[i], -1.0, 0);
+            float out = motor_thrust[i]- hover;
+            motor_out[i] =  -_constrain(out, -1.0, 0);
         }
     }
 }
@@ -347,27 +452,36 @@ static void control_step()
         ctrl_bus.att_controller.pitch_rate_pid.fb = ctrl_bus.ctrl_ins_bus->imu->gyr_y;
         ctrl_bus.att_controller.yaw_rate_pid.fb = ctrl_bus.ctrl_ins_bus->imu->gyr_z;
 
-        ctrl_bus.depth_controller.depth_pid.fb = ctrl_bus.ctrl_ins_bus->bar->depth;
-        ctrl_bus.depth_controller.depth_vel_pid.fb = ctrl_bus.ctrl_ins_bus->bar->depvel;
+        ctrl_bus.alt_controller.alt_pid.fb = ctrl_bus.ctrl_ins_bus->alt->altitude;
+        ctrl_bus.alt_controller.alt_vel_pid.fb = ctrl_bus.ctrl_ins_bus->alt->altvel;
+
+    
         if (ctrl_bus.ctrl_fms_bus->fms_out.mode == Manual)
         {
             Clear_pid_err();
             Manual_control();
             thrust_alloc();
         }
-        else
+        else if(ctrl_bus.ctrl_fms_bus->fms_out.mode == Stabilize)
         {
-            if (!roll_pitch_mode)
-            {
-                roll_pitch_control(ctrl_bus.ctrl_fms_bus->fms_out.phi_cmd, ctrl_bus.ctrl_fms_bus->fms_out.theta_cmd);
-            }
+            roll_pitch_control(ctrl_bus.ctrl_fms_bus->fms_out.phi_cmd, ctrl_bus.ctrl_fms_bus->fms_out.theta_cmd);
 
             // yaw目前是单级PID控制
-            yaw_heading_control(ctrl_bus.ctrl_fms_bus->fms_out.r_cmd);
+            yaw_rate_control(ctrl_bus.ctrl_fms_bus->fms_out.r_cmd);
 
-            depth_control(ctrl_bus.ctrl_fms_bus->fms_out.z_cmd);
-            forward_lateral_control(ctrl_bus.ctrl_fms_bus->fms_out.u_cmd, ctrl_bus.ctrl_fms_bus->fms_out.v_cmd);
+            alt_control(ctrl_bus.ctrl_fms_bus->fms_out.z_cmd);
+            // forward_lateral_control(ctrl_bus.ctrl_fms_bus->fms_out.u_cmd, ctrl_bus.ctrl_fms_bus->fms_out.v_cmd);
             thrust_alloc();
+        }
+        else if(ctrl_bus.ctrl_fms_bus->fms_out.mode == Auto)
+        {
+
+            xy_control();
+            alt_control();
+            yaw_heading_control();
+            roll_pitch_control();
+            thrust_alloc();
+            
         }
     }
     else if (ctrl_bus.ctrl_fms_bus->fms_out.status == Disarm)

@@ -49,11 +49,26 @@ typedef struct {
 } Rnf_Bus;
 
 typedef struct {
+  uint32_t timestamp;
+  float altitude;
+  float altvel;
+} Alt_Bus;
+
+typedef struct {
+  uint32_t timestamp;
+  float global_position[3];
+  float global_vel[3];
+} GPS_Bus;
+
+typedef struct {
     uint32_t timestamp;
     const IMU_Bus *imu;
     const MAG_Bus *mag;
     const Bar_Bus *bar;
     const Rnf_Bus *rnf;
+    const Alt_Bus *alt;
+    const GPS_Bus *gps;
+    float real_alt;
 } INS_Bus;
 
 void ins_interface_init();

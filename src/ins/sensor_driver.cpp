@@ -38,7 +38,8 @@ static void imu_collect();
 static void mag_collect();
 static void bar_collect();
 static void rnf_collect();
-
+static void gps_collect();
+static void airbar_collect();
 void sensor_init()
 {
     // 设置液体密度
@@ -58,6 +59,10 @@ void sensor_collect()
     bar_collect();
 
     rnf_collect();
+
+    gps_collect();
+
+    airbar_collect();
 }
 
 static void imu_collect()
@@ -114,4 +119,14 @@ static void rnf_collect()
 
         rnf_data.distance_m = uartTof.longestDistance[0];
     }
+}
+
+
+static void gps_collect();
+{
+
+}
+static void airbar_collect();
+{
+    
 }
